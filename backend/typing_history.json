@@ -1,0 +1,74 @@
+[
+    {
+        "wpm": 43,
+        "accuracy": 98,
+        "errors": 1,
+        "time": 11.947
+    },
+    {
+        "wpm": 49,
+        "accuracy": 98,
+        "errors": 1,
+        "time": 11.215
+    },
+    {
+        "wpm": 37,
+        "accuracy": 80,
+        "errors": 9,
+        "time": 14.389
+    },
+    {
+        "wpm": 18,
+        "accuracy": 0,
+        "errors": 103,
+        "time": 27.36
+    },
+    {
+        "wpm": 22,
+        "accuracy": 0,
+        "errors": 77,
+        "time": 13.332
+    },
+    {
+        "wpm": 54,
+        "accuracy": 0,
+        "errors": 78,
+        "time": 4.659
+    },
+    {
+        "wpm": 56,
+        "accuracy": 0,
+        "errors": 48,
+        "time": 3.012
+    },
+    {
+        "wpm": 38,
+        "accuracy": 0,
+        "errors": 50,
+        "time": 5.651
+    },
+    {
+        "wpm": 18,
+        "accuracy": 57,
+        "errors": 17,
+        "time": 27.235
+    },
+    {
+        "wpm": 46,
+        "accuracy": 0,
+        "errors": 51,
+        "time": 11.964
+    },
+    {
+        "wpm": 46,
+        "accuracy": 0,
+        "errors": 51,
+        "time": 11.964
+    },
+    {
+        "wpm": 30,
+        "accuracy": 0,
+        "errors": 56,
+        "time": 15.0
+    }
+]
