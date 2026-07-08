@@ -22,7 +22,3 @@ Project Structure
 2. As they type, WPM, accuracy, and errors are calculated in real time.
 3. Results are sent to the Flask backend, which logs the session using Pandas.
 4. Matplotlib is used to generate visualizations of typing progress across past sessions.
-
-- Add different difficulty levels/passage categories
-- Multiplayer typing races
-- Export progress charts as images/PDF
