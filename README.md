@@ -13,10 +13,9 @@ A typing test platform that measures typing speed (WPM), accuracy, and errors, w
 - **Backend:** Python, Flask
 - **Data & Visualization:** Pandas, Matplotlib
 
-## Project Structure
-typeSprint/
-├── backend/     # Flask server, typing test logic, history tracking, Pandas/Matplotlib visualizations
-└── frontend/    # React application (typing test UI)
+Project Structure
+-backend/ – Flask server, typing test logic, history tracking, Pandas/Matplotlib visualizations
+-frontend/ – React application (typing test UI)
 
 ## How It Works
 1. The user starts a typing test on the React frontend, typing out a given passage.
