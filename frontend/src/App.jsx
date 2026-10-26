@@ -1,16 +1,17 @@
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import { TypingTest } from "./TypingTest";
+import { ResultPage } from "./ResultPage";
+import { HistoryPage } from "./HistoryPage";
 
-import {Routes,Route} from 'react-router-dom' ;
-import {TypingTest} from "./TypingTest";
-import {ResultPage} from "./ResultPage";
-import React from 'react';
-
-export function App(){
-  return(
+export function App() {
+  return (
     <Routes>
-        <Route index element={<TypingTest/>}/>  
-        <Route path=
-        "/results" element={<ResultPage/>}/>  
+      <Route index element={<TypingTest />} />
+      <Route path="/results" element={<ResultPage />} />
+      <Route path="/history" element={<HistoryPage />} />
     </Routes>
   );
 }
 
+export default App;
