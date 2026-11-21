@@ -11,5 +11,11 @@ services:
         value: production
       - key: MONGODB_URI
         sync: false
+      - key: APP_ORIGIN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CROSS_SITE_SESSION
+        value: "true"
       - key: TRUST_PROXY
         value: "1"

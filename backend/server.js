@@ -20,9 +20,10 @@ const production = process.env.NODE_ENV === 'production';
 const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/typesprint';
 const origins = (process.env.CORS_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
 const appOrigin = production
-  ? (process.env.RENDER_EXTERNAL_URL?.trim() || process.env.APP_ORIGIN?.trim() || '')
+  ? (process.env.APP_ORIGIN?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || '')
   : (process.env.APP_ORIGIN?.trim() || 'http://localhost:5173');
-const mutationOrigins = new Set([...origins, appOrigin].filter(Boolean));
+const allowedOrigins = new Set([...origins, appOrigin].filter(Boolean));
+const mutationOrigins = allowedOrigins;
 const crossSite = process.env.CROSS_SITE_SESSION === 'true';
 const modes = new Set(['words', 'time', 'quote', 'code', 'zen']);
 const historySort = { createdAt: -1, _id: -1 };
@@ -30,7 +31,7 @@ const historySort = { createdAt: -1, _id: -1 };
 if (production && !process.env.MONGODB_URI) {
   throw new Error('Production requires MONGODB_URI.');
 }
-if (Array.from(mutationOrigins).some((origin) => {
+if (Array.from(allowedOrigins).some((origin) => {
   const url = URL.parse(origin);
   return !url || !['https:', 'http:'].includes(url.protocol) || url.origin !== origin
     || (production && url.protocol !== 'https:');
@@ -54,7 +55,12 @@ app.use(helmet({
   } : false,
   crossOriginEmbedderPolicy: false
 }));
-app.use(cors({ origin: origins.length ? origins : false, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedOrigins.has(origin));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '256kb' }));
 
 const databaseReady = () => mongoose.connection.readyState === 1;
