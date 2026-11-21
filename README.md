@@ -55,7 +55,7 @@ The **@ punctuation** and **# numbers** modifiers apply to Words and Time. The s
 
 ## Production deployment
 
-The included `render.yaml` provides a single-service Render deployment. Set `MONGODB_URI` and `APP_ORIGIN` in the Render service environment; do not add credentials to source files.
+The included `render.yaml` provides a single-service Render deployment. Set `MONGODB_URI` in the Render service environment; Render supplies the public HTTPS URL automatically. Do not add credentials to source files.
 
 Deploy the repository as one HTTPS service. Express serves the compiled frontend and `/api` on the same origin. Configure the host to build from the repository root and preserve both directories at runtime because the API imports the shared scoring module from `frontend/src/utils`.
 

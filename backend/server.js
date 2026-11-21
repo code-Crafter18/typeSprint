@@ -19,7 +19,9 @@ const PORT = process.env.PORT || 5000;
 const production = process.env.NODE_ENV === 'production';
 const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/typesprint';
 const origins = (process.env.CORS_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
-const appOrigin = process.env.APP_ORIGIN?.trim() || (production ? '' : 'http://localhost:5173');
+const appOrigin = production
+  ? (process.env.RENDER_EXTERNAL_URL?.trim() || process.env.APP_ORIGIN?.trim() || '')
+  : (process.env.APP_ORIGIN?.trim() || 'http://localhost:5173');
 const mutationOrigins = new Set([...origins, appOrigin].filter(Boolean));
 const crossSite = process.env.CROSS_SITE_SESSION === 'true';
 const modes = new Set(['words', 'time', 'quote', 'code', 'zen']);

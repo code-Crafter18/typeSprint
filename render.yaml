@@ -11,5 +11,5 @@ services:
         value: production
       - key: MONGODB_URI
         sync: false
-      - key: APP_ORIGIN
-        sync: false
+      - key: TRUST_PROXY
+        value: "1"
