@@ -47,3 +47,83 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #3e4455;
 }
+
+.nav-links,
+.header-actions,
+.sprint-save-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.nav-links,
+.header-actions {
+  justify-content: flex-end;
+}
+
+.sprint-save-status {
+  margin: 0 0 1rem;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.sprint-save-status p {
+  margin: 0;
+}
+
+.account-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.account-action small {
+  color: var(--accent-red);
+}
+
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid #2e323f;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.account-button:hover,
+.account-button:focus-visible {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.account-button:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 3px;
+}
+
+.account-button.sign-in-button {
+  border-color: var(--accent-gold);
+  background: var(--accent-gold);
+  color: #181a20;
+  font-weight: 700;
+}
+
+.account-button.sign-in-button:hover {
+  border-color: #f3ce47;
+  background: #f3ce47;
+}
+
+.account-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}

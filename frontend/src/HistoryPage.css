@@ -67,6 +67,50 @@
   font-size: 1.1rem;
 }
 
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.3);
+  color: #fecaca;
+}
+
+.error-banner button {
+  border: 1px solid rgba(254, 202, 202, 0.5);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.history-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  color: #9ca3af;
+}
+
+.history-pagination button {
+  border: 1px solid #2e323f;
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: #21242e;
+  color: #d1d5db;
+  cursor: pointer;
+}
+
+.history-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -235,4 +279,65 @@
 .cell-date {
   color: #9ca3af;
   font-size: 0.85rem;
+}
+
+.header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.history-filter-pills {
+  display: inline-flex;
+  gap: 6px;
+  background: #181920;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #2e323f;
+}
+
+.filter-pill {
+  background: none;
+  border: none;
+  color: #646b7a;
+  cursor: pointer;
+  padding: 3px 9px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 500;
+  border-radius: 5px;
+  transition: all 0.15s ease;
+  text-transform: capitalize;
+}
+
+.filter-pill:hover {
+  color: #d1d5db;
+}
+
+.filter-pill.active {
+  background: #282c38;
+  color: #e2b714;
+  font-weight: 600;
+}
+
+.cell-action {
+  text-align: right;
+  padding-right: 8px !important;
+}
+
+.delete-item-btn {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.delete-item-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }

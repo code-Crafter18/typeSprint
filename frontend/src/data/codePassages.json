@@ -1,0 +1,107 @@
+[
+  {
+    "language": "javascript",
+    "title": "Group tasks by status",
+    "text": "function groupTasks(tasks) {\n  const groups = new Map();\n\n  for (const task of tasks) {\n    const status = task.done ? \"finished\" : \"open\";\n    const list = groups.get(status) ?? [];\n    list.push(task.title);\n    groups.set(status, list);\n  }\n\n  return Object.fromEntries(groups);\n}"
+  },
+  {
+    "language": "javascript",
+    "title": "Build a search index",
+    "text": "function buildSearchIndex(documents) {\n  const index = Object.create(null);\n\n  for (const document of documents) {\n    const words = document.title.toLowerCase().split(/\\s+/);\n    for (const word of new Set(words)) {\n      (index[word] ??= []).push(document.id);\n    }\n  }\n\n  return index;\n}"
+  },
+  {
+    "language": "javascript",
+    "title": "Limit concurrent jobs",
+    "text": "async function runQueue(jobs, limit) {\n  if (limit < 1) throw new RangeError(\"Choose a positive limit\");\n\n  const results = [];\n  let next = 0;\n\n  async function worker() {\n    while (next < jobs.length) {\n      const index = next++;\n      results[index] = await jobs[index]();\n    }\n  }\n\n  const workers = Array.from(\n    { length: Math.min(limit, jobs.length) },\n    () => worker()\n  );\n  await Promise.all(workers);\n  return results;\n}"
+  },
+  {
+    "language": "python",
+    "title": "Summarize daily expenses",
+    "text": "from collections import defaultdict\nfrom decimal import Decimal\n\n\ndef totals_by_day(expenses):\n    totals = defaultdict(Decimal)\n\n    for expense in expenses:\n        day = expense[\"date\"]\n        amount = Decimal(expense[\"amount\"])\n        totals[day] += amount\n\n    return dict(sorted(totals.items()))"
+  },
+  {
+    "language": "python",
+    "title": "Find the first matching value",
+    "text": "def lower_bound(values, target):\n    left = 0\n    right = len(values)\n\n    while left < right:\n        middle = (left + right) // 2\n        if values[middle] < target:\n            left = middle + 1\n        else:\n            right = middle\n\n    return left\n\n\ndef contains(values, target):\n    index = lower_bound(values, target)\n    return index < len(values) and values[index] == target"
+  },
+  {
+    "language": "python",
+    "title": "Find the shortest graph path",
+    "text": "from collections import deque\n\n\ndef shortest_distance(graph, start, end):\n    queue = deque([(start, 0)])\n    seen = {start}\n\n    while queue:\n        vertex, distance = queue.popleft()\n        if vertex == end:\n            return distance\n\n        for neighbor in graph.get(vertex, ()):\n            if neighbor not in seen:\n                seen.add(neighbor)\n                queue.append((neighbor, distance + 1))\n\n    return None"
+  },
+  {
+    "language": "cpp",
+    "title": "Merge two sorted lists",
+    "text": "#include <vector>\n\nstd::vector<int> mergeSorted(const std::vector<int>& left,\n                             const std::vector<int>& right) {\n    std::vector<int> result;\n    auto first = left.begin();\n    auto second = right.begin();\n\n    while (first != left.end() && second != right.end()) {\n        if (*first <= *second) {\n            result.push_back(*first++);\n        } else {\n            result.push_back(*second++);\n        }\n    }\n\n    result.insert(result.end(), first, left.end());\n    result.insert(result.end(), second, right.end());\n    return result;\n}"
+  },
+  {
+    "language": "cpp",
+    "title": "Check balanced brackets",
+    "text": "#include <stack>\n#include <string>\n\nbool isBalanced(const std::string& text) {\n    std::stack<char> expected;\n\n    for (char ch : text) {\n        if (ch == '(') {\n            expected.push(')');\n        } else if (ch == '[') {\n            expected.push(']');\n        } else if (ch == ')' || ch == ']') {\n            if (expected.empty() || expected.top() != ch) {\n                return false;\n            }\n            expected.pop();\n        }\n    }\n\n    return expected.empty();\n}"
+  },
+  {
+    "language": "cpp",
+    "title": "Count distinct values in a window",
+    "text": "#include <cstddef>\n#include <unordered_map>\n#include <vector>\n\nstd::vector<int> countDistinct(const std::vector<int>& values,\n                              std::size_t width) {\n    if (width == 0 || width > values.size()) return {};\n\n    std::unordered_map<int, int> counts;\n    std::vector<int> result;\n\n    for (std::size_t i = 0; i < values.size(); ++i) {\n        ++counts[values[i]];\n        if (i >= width && --counts[values[i - width]] == 0) {\n            counts.erase(values[i - width]);\n        }\n        if (i + 1 >= width) {\n            result.push_back(static_cast<int>(counts.size()));\n        }\n    }\n\n    return result;\n}"
+  },
+  {
+    "language": "java",
+    "title": "Index students by course",
+    "text": "import java.util.ArrayList;\nimport java.util.HashMap;\nimport java.util.List;\nimport java.util.Map;\n\nclass Enrollments {\n    record Student(String name, String course) {}\n\n    static Map<String, List<String>> byCourse(List<Student> students) {\n        Map<String, List<String>> courses = new HashMap<>();\n        for (Student student : students) {\n            courses.computeIfAbsent(student.course(), key -> new ArrayList<>())\n                   .add(student.name());\n        }\n        return courses;\n    }\n}"
+  },
+  {
+    "language": "java",
+    "title": "Keep the three highest scores",
+    "text": "import java.util.ArrayList;\nimport java.util.Collections;\nimport java.util.List;\nimport java.util.PriorityQueue;\n\nclass Rankings {\n    static List<Integer> topThree(int[] scores) {\n        PriorityQueue<Integer> heap = new PriorityQueue<>();\n        for (int score : scores) {\n            heap.add(score);\n            if (heap.size() > 3) {\n                heap.poll();\n            }\n        }\n\n        List<Integer> result = new ArrayList<>();\n        while (!heap.isEmpty()) {\n            result.add(heap.remove());\n        }\n        Collections.reverse(result);\n        return result;\n    }\n}"
+  },
+  {
+    "language": "java",
+    "title": "Cache a lookup result",
+    "text": "import java.util.HashMap;\nimport java.util.Map;\nimport java.util.function.Function;\n\nclass LookupCache<T> {\n    private final Map<String, T> values = new HashMap<>();\n    private final Function<String, T> loader;\n\n    LookupCache(Function<String, T> loader) {\n        this.loader = loader;\n    }\n\n    T get(String key) {\n        return values.computeIfAbsent(key, loader);\n    }\n\n    void invalidate(String key) {\n        values.remove(key);\n    }\n}"
+  },
+  {
+    "language": "sql",
+    "title": "Find the best score for each mode",
+    "text": "WITH mode_scores AS (\n    SELECT mode, user_id, MAX(wpm) AS best_wpm\n    FROM sprint_results\n    WHERE accuracy >= 95\n    GROUP BY mode, user_id\n)\nSELECT m.mode, u.name, m.best_wpm\nFROM mode_scores AS m\nJOIN users AS u ON u.id = m.user_id\nWHERE m.best_wpm = (\n    SELECT MAX(best_wpm)\n    FROM mode_scores\n    WHERE mode = m.mode\n)\nORDER BY m.mode, u.name;"
+  },
+  {
+    "language": "sql",
+    "title": "Find courses without enrollments",
+    "text": "SELECT\n    c.id,\n    c.title,\n    d.name AS department\nFROM courses AS c\nJOIN departments AS d ON d.id = c.department_id\nLEFT JOIN enrollments AS e ON e.course_id = c.id\nWHERE e.course_id IS NULL\n  AND c.is_active = TRUE\nORDER BY d.name, c.title;"
+  },
+  {
+    "language": "sql",
+    "title": "Compare monthly revenue",
+    "text": "WITH monthly_totals AS (\n    SELECT\n        EXTRACT(YEAR FROM ordered_at) AS order_year,\n        EXTRACT(MONTH FROM ordered_at) AS order_month,\n        SUM(total_amount) AS revenue\n    FROM orders\n    WHERE status = 'paid'\n    GROUP BY\n        EXTRACT(YEAR FROM ordered_at),\n        EXTRACT(MONTH FROM ordered_at)\n)\nSELECT order_year, order_month, revenue\nFROM monthly_totals\nWHERE revenue > 10000\nORDER BY order_year, order_month;"
+  },
+  {
+    "language": "html",
+    "title": "Build an accessible search form",
+    "text": "<main>\n  <h1>Find a course</h1>\n  <form action=\"/courses\" method=\"get\" role=\"search\">\n    <label for=\"query\">Course name</label>\n    <input id=\"query\" name=\"query\" type=\"search\" required>\n\n    <label for=\"level\">Difficulty</label>\n    <select id=\"level\" name=\"level\">\n      <option value=\"\">Any difficulty</option>\n      <option value=\"beginner\">Beginner</option>\n      <option value=\"advanced\">Advanced</option>\n    </select>\n\n    <button type=\"submit\">Search courses</button>\n  </form>\n</main>"
+  },
+  {
+    "language": "html",
+    "title": "Write a project card",
+    "text": "<article class=\"project-card\" aria-labelledby=\"project-title\">\n  <header>\n    <h2 id=\"project-title\">TypeSprint</h2>\n    <p>Practice typing with timed challenges and code snippets.</p>\n  </header>\n\n  <ul class=\"project-tags\" aria-label=\"Technologies\">\n    <li>React</li>\n    <li>Node.js</li>\n    <li>MongoDB</li>\n  </ul>\n\n  <footer>\n    <a href=\"/projects/typesprint\">View project details</a>\n  </footer>\n</article>"
+  },
+  {
+    "language": "html",
+    "title": "Build a weekly results table",
+    "text": "<table>\n  <caption>Typing results for this week</caption>\n  <thead>\n    <tr>\n      <th scope=\"col\">Mode</th>\n      <th scope=\"col\">Speed</th>\n      <th scope=\"col\">Accuracy</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <th scope=\"row\">Words</th>\n      <td>72 WPM</td>\n      <td>98%</td>\n    </tr>\n  </tbody>\n</table>"
+  },
+  {
+    "language": "css",
+    "title": "Build a responsive card grid",
+    "text": ".card-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));\n  gap: 1rem;\n}\n\n.card {\n  padding: 1.25rem;\n  border: 1px solid var(--border-color);\n  border-radius: 12px;\n}\n\n@media (max-width: 480px) {\n  .card-grid {\n    grid-template-columns: 1fr;\n  }\n}"
+  },
+  {
+    "language": "css",
+    "title": "Add visible keyboard focus",
+    "text": ".link-button {\n  display: inline-flex;\n  align-items: center;\n  padding: 0.5rem 0.75rem;\n  border-radius: 6px;\n  background: var(--surface);\n}\n\n.link-button:focus-visible {\n  outline: 2px solid var(--accent);\n  outline-offset: 3px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .link-button {\n    transition: none;\n  }\n}"
+  },
+  {
+    "language": "css",
+    "title": "Align a form with CSS grid",
+    "text": ".settings-form {\n  display: grid;\n  grid-template-columns: max-content minmax(0, 1fr);\n  gap: 0.75rem 1rem;\n  align-items: center;\n}\n\n.settings-form > button {\n  grid-column: 2;\n  justify-self: start;\n}\n\n@media (max-width: 560px) {\n  .settings-form {\n    grid-template-columns: 1fr;\n  }\n\n  .settings-form > button {\n    grid-column: auto;\n  }\n}"
+  }
+]

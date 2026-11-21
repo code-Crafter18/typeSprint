@@ -3,24 +3,7 @@ import React, { useState } from "react";
 export function InteractiveChart({ wpmData = [], errorData = [], avgWpm = 0, totalTime = 0 }) {
   const [hoverIndex, setHoverIndex] = useState(null);
 
-  // Normalize data points so chart is always guaranteed to display beautifully
-  let chartData = Array.isArray(wpmData) && wpmData.length > 0 ? [...wpmData] : [];
-
-  if (chartData.length === 0) {
-    const duration = Math.max(1, Math.round(totalTime || 5));
-    const speed = Math.max(10, avgWpm || 40);
-    chartData = [
-      { time: 1, wpm: Math.round(speed * 0.75) },
-      { time: Math.max(2, Math.round(duration / 2)), wpm: speed },
-      { time: duration, wpm: speed },
-    ];
-  } else if (chartData.length === 1) {
-    const single = chartData[0];
-    chartData = [
-      { time: Math.max(0, single.time - 1), wpm: Math.round(single.wpm * 0.8) },
-      single,
-    ];
-  }
+  const chartData = wpmData.length ? wpmData : [{ time: totalTime, wpm: avgWpm }];
 
   const width = 800;
   const height = 300;
@@ -29,7 +12,7 @@ export function InteractiveChart({ wpmData = [], errorData = [], avgWpm = 0, tot
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
 
-  const minTime = Math.min(...chartData.map((d) => d.time));
+  const minTime = 0;
   const maxTime = Math.max(...chartData.map((d) => d.time), minTime + 1);
   const timeSpan = Math.max(maxTime - minTime, 1);
 
@@ -59,7 +42,7 @@ export function InteractiveChart({ wpmData = [], errorData = [], avgWpm = 0, tot
     errorData.forEach((err) => {
       const t = err.time;
       if (t !== undefined) {
-        errorMap[t] = (errorMap[t] || 0) + 1;
+        errorMap[t] = (errorMap[t] || 0) + (err.count ?? 1);
       }
     });
   }
@@ -69,6 +52,8 @@ export function InteractiveChart({ wpmData = [], errorData = [], avgWpm = 0, tot
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: "800px", margin: "0 auto" }}>
       <svg
+        role="img"
+        aria-label="Typing speed and mistakes over time"
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
       >

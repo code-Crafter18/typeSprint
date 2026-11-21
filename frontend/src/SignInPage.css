@@ -1,0 +1,119 @@
+.sign-in-page {
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  min-height: 100vh;
+  padding: clamp(32px, 10vh, 100px) 16px 32px;
+}
+
+.sign-in-card {
+  width: min(100%, 460px);
+  padding: clamp(20px, 6vw, 36px);
+  border: 1px solid #303442;
+  border-radius: 16px;
+  background: #1f222b;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 20%);
+}
+
+.sign-in-card h1 {
+  margin: 0;
+  color: #f3f4f6;
+  font: 700 clamp(1.55rem, 4.5vw, 2rem)/1.15 'Outfit', sans-serif;
+}
+
+.credentials-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.credentials-form label {
+  margin-top: 12px;
+  color: #e2e6ee;
+  font-size: 0.875rem;
+}
+
+.credentials-form input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #424756;
+  border-radius: 8px;
+  background: #181a20;
+  color: #f3f4f6;
+  font: inherit;
+  font-size: 1rem;
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.password-visibility {
+  padding: 0 8px;
+  border: 1px solid #424756;
+  border-radius: 8px;
+  background: #252833;
+  color: #cbd2df;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.credentials-submit {
+  min-height: 44px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-gold);
+  color: #181a20;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.credentials-submit:hover {
+  background: #f3ce47;
+}
+
+.credentials-submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.sign-in-error {
+  margin: 10px 0 0;
+  color: #ffa7a7;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.account-switch {
+  margin: 20px 0 0;
+  text-align: center;
+  color: #c4cbd8;
+  font-size: 0.875rem;
+}
+
+.account-switch a {
+  color: #f4d568;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+.guest-return {
+  display: block;
+  width: fit-content;
+  margin: 20px auto 0;
+  color: #a3acbc;
+  font-size: 0.85rem;
+  text-underline-offset: 3px;
+}
+
+.sign-in-card :is(input, a, button):focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}

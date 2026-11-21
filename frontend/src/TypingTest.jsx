@@ -1,396 +1,377 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import "./typingTest.css";
+import "./typingtest.css";
 import { SettingsBar } from "./SettingBar.jsx";
+import { CodePassage } from "./components/CodePassage.jsx";
+import { AccountAction } from "./components/AccountAction.jsx";
+import codePassages from "./data/codePassages.json";
+import {
+  CODE_LANGUAGES, isCodePassage, pickCodePassage, codeTypingTarget,
+  appendCodeInput, matchCodeCharacters,
+} from "./utils/codeTyping.mjs";
 import { soundEngine } from "./utils/sound.js";
+import { apiRequest } from "./api.js";
+import {
+  matchCharacters, scoreSprint, sprintSpeed, MAX_SPRINT_SECONDS,
+  MAX_SPRINT_CHARACTERS, MAX_SERIES_POINTS,
+} from "./utils/scoring.mjs";
 
-export function TypingTest() {
-  const [sentence, setSentence] = useState("");
+const FALLBACK_WORDS = "the quick brown fox jumps over the lazy dog and runs across the field".split(" ");
+
+function fallbackWords(count, punctuation, numbers) {
+  return Array.from({ length: count }, (_, index) => {
+    const word = numbers && index % 7 === 2
+      ? String(index + 10)
+      : FALLBACK_WORDS[index % FALLBACK_WORDS.length];
+    return punctuation && index % 8 === 7 ? word + "." : word;
+  });
+}
+
+function passageWords(text) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("The server returned an empty passage.");
+  return text.trim().split(/\s+/);
+}
+
+function sampleSeries(samples, field) {
+  const points = Array.from(samples, ([time, value]) => ({ time, [field]: value }));
+  if (points.length <= MAX_SERIES_POINTS) return points;
+  const size = Math.ceil(points.length / MAX_SERIES_POINTS);
+  const combined = [];
+  for (let index = 0; index < points.length; index += size) {
+    const group = points.slice(index, index + size);
+    const last = group.at(-1);
+    combined.push(field === "count"
+      ? { time: last.time, count: group.reduce((sum, point) => sum + point.count, 0) }
+      : last);
+  }
+  return combined;
+}
+
+function newRun() {
+  return {
+    start: null,
+    finished: false,
+    typed: "",
+    attempts: { correct: 0, incorrect: 0 },
+    wpm: new Map(),
+    errors: new Map(),
+  };
+}
+
+export function TypingTest({ auth, onResult }) {
+  const [wordsList, setWordsList] = useState([]);
   const [userInput, setUserInput] = useState("");
-  const [testActive, setTestActive] = useState(false);
-  const [errorCount, setErrorCount] = useState(0);
-  const [extraCharsMap, setExtraCharsMap] = useState({});
-  const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [startTime, setStartTime] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-
-  // Keystroke statistics
-  const keystrokesRef = useRef({ correct: 0, incorrect: 0, extra: 0, missed: 0 });
-  const userInputRef = useRef("");
-  const testActiveRef = useRef(false);
-
-  const navigate = useNavigate();
-  const [wpmData, setWpmData] = useState([]);
-  const [errorData, setErrorData] = useState([]);
-  const wpmDataRef = useRef([]);
-  const errorDataRef = useRef([]);
-  const intervalRef = useRef(null);
-
-  // Settings
+  const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.enabled);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const [punctuation, setPunctuation] = useState(false);
   const [numbers, setNumbers] = useState(false);
-  const [testMode, setTestMode] = useState("words"); // 'words', 'time', 'quote'
+  const [testMode, setTestMode] = useState("words");
+  const [codeLanguage, setCodeLanguage] = useState("all");
+  const [codePassage, setCodePassage] = useState(null);
   const [testDuration, setTestDuration] = useState(15);
   const [wordCount, setWordCount] = useState(25);
-  const [timeLeft, setTimeLeft] = useState(testDuration);
+  const [timeLeft, setTimeLeft] = useState(15);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const words = sentence ? sentence.split(" ") : [];
+  const inputRef = useRef(null);
+  const wordRefs = useRef([]);
+  const runRef = useRef(newRun());
+  const timerRef = useRef(null);
+  const passageRef = useRef(null);
+  const initialWordsRef = useRef([]);
+  const wordsRef = useRef([]);
+  const refillRef = useRef(null);
+  const saveRef = useRef(null);
+  const composingRef = useRef(false);
+  const navigate = useNavigate();
 
-  // Synchronize refs
-  useEffect(() => {
-    userInputRef.current = userInput;
-  }, [userInput]);
+  const typedWords = userInput.split(" ");
+  const currentWordIndex = typedWords.length - 1;
+  const codeTarget = codePassage ? codeTypingTarget(codePassage.text) : "";
+  const currentLine = userInput.split("\n").length;
+  const codeLineCount = codeTarget.split("\n").length;
 
-  useEffect(() => {
-    testActiveRef.current = testActive;
-  }, [testActive]);
+  useLayoutEffect(() => {
+    if (testMode === "code") return;
+    const word = wordRefs.current[currentWordIndex];
+    const update = () => setScrollOffset(Math.max(0, (word?.offsetTop ?? 0) - 48));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [currentWordIndex, testMode, wordsList]);
 
-  // Load new sentence whenever mode or modifiers change
-  useEffect(() => {
-    startTest();
-  }, [punctuation, numbers, testMode, testDuration, wordCount]);
+  const startTest = useCallback(({ regenerate = false, previousTitle = "" } = {}) => {
+    onResult(null);
+    passageRef.current?.abort();
+    refillRef.current?.abort();
+    refillRef.current = null;
+    clearInterval(timerRef.current);
+    runRef.current = newRun();
+    setRunning(false);
+    composingRef.current = false;
+    if (inputRef.current) inputRef.current.value = "";
+    setUserInput("");
+    setScrollOffset(0);
+    setTimeLeft(testDuration);
+    setErrorMessage("");
 
-  // Timer & Real-time WPM tick
-  useEffect(() => {
-    if (testActive && startTime) {
-      intervalRef.current = setInterval(() => {
-        const now = new Date();
-        const elapsed = Math.max(1, Math.round((now - startTime) / 1000));
+    if (!regenerate && initialWordsRef.current.length) {
+      wordsRef.current = initialWordsRef.current;
+      setWordsList(initialWordsRef.current);
+      inputRef.current?.focus();
+      return;
+    }
 
-        if (testMode === "time") {
-          const newTimeLeft = testDuration - elapsed;
-          setTimeLeft(newTimeLeft <= 0 ? 0 : newTimeLeft);
+    setLoading(true);
+    wordsRef.current = [];
+    initialWordsRef.current = [];
+    setWordsList([]);
+    setCodePassage(null);
+    const controller = new AbortController();
+    passageRef.current = controller;
+    const params = new URLSearchParams({
+      testMode, punctuation, numbers, wordCount, testDuration,
+    });
+
+    if (testMode === "code") {
+      params.set("language", codeLanguage);
+      if (previousTitle) params.set("previousTitle", previousTitle);
+    }
+
+    const show = (words) => {
+      if (controller.signal.aborted) return;
+      wordsRef.current = words;
+      initialWordsRef.current = words;
+      setWordsList(words);
+      setLoading(false);
+    };
+
+    const showCode = (passage) => {
+      if (controller.signal.aborted) return;
+      setCodePassage(passage);
+      show([passage.text]);
+    };
+
+    apiRequest("/api/text?" + params, { signal: controller.signal })
+      .then((passage) => {
+        if (testMode !== "code") {
+          show(passageWords(passage.text));
+        } else {
+          if (!isCodePassage(passage) || (codeLanguage !== "all" && passage.language !== codeLanguage)) {
+            throw new Error("Invalid code passage");
+          }
+          showCode(passage);
         }
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setErrorMessage("The server is unavailable. Using an offline passage.");
+        if (testMode === "code") {
+          showCode(pickCodePassage(codePassages, codeLanguage, previousTitle));
+        } else if (testMode === "quote") {
+          show(passageWords("The only way to do great work is to love what you do. - Steve Jobs"));
+        } else {
+          const count = testMode === "time" ? Math.max(50, Math.floor(testDuration * 3.5)) : wordCount;
+          show(fallbackWords(count, punctuation, numbers));
+        }
+      });
+  }, [codeLanguage, numbers, onResult, punctuation, testDuration, testMode, wordCount]);
 
-        const currentTyped = userInputRef.current;
-        const wordsTyped = currentTyped.length / 5;
-        const liveWpm = Math.round((wordsTyped / elapsed) * 60);
-
-        const newPoint = { time: elapsed, wpm: liveWpm };
-        const updated = wpmDataRef.current.filter((p) => p.time !== elapsed).concat(newPoint);
-        wpmDataRef.current = updated;
-        setWpmData(updated);
-      }, 1000);
-    }
-
-    return () => clearInterval(intervalRef.current);
-  }, [testActive, startTime, testMode, testDuration]);
-
-  // Handle time mode completion
   useEffect(() => {
-    if (testMode === "time" && timeLeft <= 0 && testActive) {
-      finishTest(userInputRef.current, testDuration);
-    }
-  }, [timeLeft, testMode, testActive, testDuration]);
+    startTest({ regenerate: true });
+    return () => {
+      passageRef.current?.abort();
+      refillRef.current?.abort();
+      clearInterval(timerRef.current);
+    };
+  }, [startTest]);
 
-  const calculateAndSaveResults = async (finalInput, timeElapsed) => {
-    const elapsedSec = Math.max(1, Math.round(timeElapsed));
-    const calculatedWpm = Math.max(0, Math.round((finalInput.length / 5) / (elapsedSec / 60)));
+  useEffect(() => () => {
+    saveRef.current?.abort();
+    saveRef.current = null;
+  }, []);
 
-    // Ensure we have a valid time series for charting
-    let finalWpmSeries = [...wpmDataRef.current];
-    if (finalWpmSeries.length === 0) {
-      finalWpmSeries = [
-        { time: 1, wpm: Math.round(calculatedWpm * 0.8) },
-        { time: elapsedSec, wpm: calculatedWpm },
-      ];
-    } else {
-      const last = finalWpmSeries[finalWpmSeries.length - 1];
-      if (last.time < elapsedSec) {
-        finalWpmSeries.push({ time: elapsedSec, wpm: calculatedWpm });
-      }
-    }
+  const appendMoreWords = () => {
+    if (refillRef.current) return;
+    const controller = new AbortController();
+    refillRef.current = controller;
+    const params = new URLSearchParams({ testMode: "words", wordCount: 35, punctuation, numbers });
+    const append = (words) => {
+      if (controller.signal.aborted) return;
+      wordsRef.current = [...wordsRef.current, ...words];
+      setWordsList(wordsRef.current);
+    };
+    apiRequest("/api/text?" + params, { signal: controller.signal })
+      .then(({ text }) => append(passageWords(text)))
+      .catch(() => append(fallbackWords(35, punctuation, numbers)))
+      .finally(() => {
+        if (refillRef.current === controller) refillRef.current = null;
+      });
+  };
 
-    const currentErrors = [...errorDataRef.current];
+  const countTyped = (input, completed) => codePassage
+    ? matchCodeCharacters(codeTarget, input)
+    : matchCharacters(wordsRef.current, input.split(" "), completed);
 
+  const finishTest = async (elapsed, completed = false) => {
+    const run = runRef.current;
+    if (run.finished) return;
+    run.finished = true;
+    setRunning(false);
+    setSaving(true);
+    clearInterval(timerRef.current);
+    refillRef.current?.abort();
+
+    const keystrokes = countTyped(run.typed, completed);
+    run.wpm.set(Math.ceil(elapsed), sprintSpeed(keystrokes.correct, elapsed));
+    const wpmData = sampleSeries(run.wpm, "wpm");
+    const errorData = sampleSeries(run.errors, "count");
+    const config = testMode === "time" ? testDuration + "s"
+      : testMode === "words" ? wordCount + " words"
+        : codePassage ? CODE_LANGUAGES[codePassage.language] + " · " + codePassage.title : testMode;
+    const local = {
+      ...scoreSprint(keystrokes, run.attempts, elapsed, wpmData),
+      errorData,
+      mode: testMode,
+      config,
+      saved: false,
+    };
+    const controller = new AbortController();
+    saveRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    let result;
     try {
-      const response = await fetch("http://127.0.0.1:5000/api/calculate", {
+      result = await apiRequest("/api/calculate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          finalUserInput: finalInput,
-          timeElapsed,
-          finalErrorCount: errorCount,
-          wpmData: finalWpmSeries,
-          errorData: currentErrors,
-          keystrokes: keystrokesRef.current,
-          testMode,
-          testConfig: testMode === "time" ? `${testDuration}s` : `${wordCount} words`,
+          keystrokes, attempts: run.attempts, timeElapsed: elapsed, wpmData, errorData,
+          testMode, testConfig: config,
         }),
+        signal: controller.signal,
       });
-
-      const serverResults = await response.json();
-      const enrichedResults = {
-        ...serverResults,
-        wpmData: serverResults.wpmData && serverResults.wpmData.length > 0 ? serverResults.wpmData : finalWpmSeries,
-        errorData: serverResults.errorData || currentErrors,
-      };
-
-      if (response.ok) {
-        sessionStorage.setItem("lastSprintResults", JSON.stringify(enrichedResults));
-        navigate("/results", { state: enrichedResults });
-      } else {
-        const fallback = {
-          wpm: calculatedWpm,
-          accuracy: 0,
-          errors: errorCount,
-          time: timeElapsed,
-          wpmData: finalWpmSeries,
-          errorData: currentErrors,
-        };
-        sessionStorage.setItem("lastSprintResults", JSON.stringify(fallback));
-        navigate("/results", { state: fallback });
-      }
     } catch {
-      // Fallback calculation if backend unreachable
-      const accuracy = Math.max(0, Math.round((1 - errorCount / Math.max(1, finalInput.length)) * 100));
-      const fallbackResult = {
-        wpm: calculatedWpm,
-        raw_wpm: calculatedWpm,
-        accuracy,
-        errors: errorCount,
-        time: timeElapsed,
-        graph_image: null,
-        wpmData: finalWpmSeries,
-        errorData: currentErrors,
-      };
-      sessionStorage.setItem("lastSprintResults", JSON.stringify(fallbackResult));
-      navigate("/results", { state: fallbackResult });
+      result = { ...local, errorMessage: "The server did not confirm the result. Showing your local score." };
+    } finally {
+      clearTimeout(timeout);
     }
+    if (saveRef.current !== controller) return;
+    onResult(result);
+    navigate("/results");
   };
 
-  const finishTest = useCallback(
-    (finalInput, timeElapsed) => {
-      setTestActive(false);
-      clearInterval(intervalRef.current);
-      calculateAndSaveResults(finalInput, timeElapsed);
-    },
-    [errorCount, testMode, testDuration, wordCount]
-  );
+  const handleTyping = (event) => {
+    if (composingRef.current) return;
+    const input = event.currentTarget;
+    const run = runRef.current;
+    const before = run.typed;
+    const after = codePassage ? input.value : input.value.replace(/\n/g, " ");
+    const words = wordsRef.current;
+    if (!words.length || run.finished || after.length > MAX_SPRINT_CHARACTERS ||
+      (!after.startsWith(before) && !before.startsWith(after))) {
+      input.value = before;
+      return;
+    }
+    const now = performance.now();
+    const limit = testMode === "time" ? testDuration : MAX_SPRINT_SECONDS;
+    if (run.start !== null && now - run.start >= limit * 1000) {
+      input.value = before;
+      finishTest(limit);
+      return;
+    }
 
-  const startTest = useCallback(() => {
-    setLoading(true);
-    setTestActive(false);
-    setUserInput("");
-    setErrorCount(0);
-    setExtraCharsMap({});
-    setCurrentWordIndex(0);
-    setStartTime(null);
-    clearInterval(intervalRef.current);
-    setWpmData([]);
-    setErrorData([]);
-    wpmDataRef.current = [];
-    errorDataRef.current = [];
-    setTimeLeft(testDuration);
-    keystrokesRef.current = { correct: 0, incorrect: 0, extra: 0, missed: 0 };
+    if (before.startsWith(after)) {
+      run.typed = after;
+      setUserInput(after);
+      if (after !== before) soundEngine.playKeyClick(true);
+      return;
+    }
 
-    const params = new URLSearchParams({
-      punctuation: punctuation.toString(),
-      numbers: numbers.toString(),
-      testMode,
-      wordCount: wordCount.toString(),
-      testDuration: testDuration.toString(),
-    });
+    const startRun = () => {
+      if (run.start !== null) return;
 
-    fetch(`http://127.0.0.1:5000/api/text?${params.toString()}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.text) {
-          setSentence(data.text);
-          setTestActive(true);
-        } else {
-          setSentence("the quick brown fox jumps over the lazy dog");
-          setTestActive(true);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setSentence("the quick brown fox jumps over the lazy dog and runs across the field");
-        setTestActive(true);
-        setLoading(false);
-      });
-  }, [punctuation, numbers, testMode, wordCount, testDuration]);
-
-  // Keyboard Handler
-  useEffect(() => {
-    let tabPressed = false;
-
-    const handleKeyDown = (e) => {
-      // Keyboard Shortcuts: Tab + Enter or Escape to restart test
-      if (e.key === "Tab") {
-        tabPressed = true;
-        return;
-      }
-      if ((tabPressed && e.key === "Enter") || e.key === "Escape") {
-        e.preventDefault();
-        tabPressed = false;
-        startTest();
-        return;
-      }
-      tabPressed = false;
-
-      if (!testActiveRef.current || (testMode === "time" && timeLeft <= 0)) return;
-
-      const currentWord = words[currentWordIndex] || "";
-      const currentInput = (userInput.split(" ")[currentWordIndex] || "");
-      const isLastWord = currentWordIndex === words.length - 1;
-
-      // Handle Backspace
-      if (e.key === "Backspace") {
-        const buffer = extraCharsMap[currentWordIndex] || "";
-
-        if (buffer.length > 0) {
-          setExtraCharsMap((prev) => ({
-            ...prev,
-            [currentWordIndex]: buffer.slice(0, -1),
-          }));
-          setErrorCount((prev) => Math.max(0, prev - 1));
-          errorDataRef.current = errorDataRef.current.slice(0, -1);
-          setErrorData(errorDataRef.current);
-        } else if (currentInput.length > 0) {
-          const charIndex = currentInput.length - 1;
-          const charToDelete = currentInput[charIndex];
-          const charCorrect = currentWord[charIndex];
-
-          if (charToDelete !== charCorrect) {
-            setErrorCount((prev) => Math.max(0, prev - 1));
-            errorDataRef.current = errorDataRef.current.slice(0, -1);
-            setErrorData(errorDataRef.current);
-          }
-
-          const allWords = userInput.split(" ");
-          allWords[currentWordIndex] = allWords[currentWordIndex].slice(0, -1);
-          setUserInput(allWords.join(" "));
-        }
-        soundEngine.playKeyClick(true);
-        e.preventDefault();
-        return;
-      }
-
-      // Ignore modifiers, arrows, F-keys, etc.
-      if (e.key.length > 1 || e.ctrlKey || e.altKey || e.metaKey) return;
-
-      // Start timing upon first keypress
-      let activeStartTime = startTime;
-      if (!activeStartTime) {
-        activeStartTime = new Date();
-        setStartTime(activeStartTime);
-        if (testMode === "time") {
-          setTimeLeft(testDuration);
-        }
-      }
-
-      const now = new Date();
-      const elapsed = Math.max(1, Math.round((now - activeStartTime) / 1000));
-
-      // Extra character typed on word
-      if (!isLastWord && currentInput.length >= currentWord.length && e.key !== " ") {
-        setExtraCharsMap((prev) => {
-          const current = prev[currentWordIndex] || "";
-          if (current.length >= 8) return prev;
-          setErrorCount((p) => p + 1);
-          errorDataRef.current = [...errorDataRef.current, { time: elapsed }];
-          setErrorData(errorDataRef.current);
-          keystrokesRef.current.extra += 1;
-          return { ...prev, [currentWordIndex]: current + e.key };
-        });
-        soundEngine.playError();
-        e.preventDefault();
-        return;
-      }
-
-      // Space key to advance word
-      if (e.key === " ") {
-        if (currentInput.length === 0) {
-          e.preventDefault();
+      run.start = now;
+      setRunning(true);
+      timerRef.current = setInterval(() => {
+        const elapsed = (performance.now() - run.start) / 1000;
+        if (testMode === "time") setTimeLeft(Math.max(0, testDuration - Math.floor(elapsed)));
+        if (elapsed >= limit) {
+          finishTest(limit);
           return;
         }
-
-        if (currentWordIndex < words.length - 1) {
-          if (currentInput.length < currentWord.length) {
-            const skipped = currentWord.length - currentInput.length;
-            setErrorCount((p) => p + skipped);
-            keystrokesRef.current.missed += skipped;
-            const errorEvents = Array(skipped).fill({ time: elapsed });
-            errorDataRef.current = [...errorDataRef.current, ...errorEvents];
-            setErrorData(errorDataRef.current);
-          }
-
-          const nextIndex = currentWordIndex + 1;
-          setCurrentWordIndex(nextIndex);
-
-          setUserInput((prev) => {
-            const allWords = prev.split(" ");
-            while (allWords.length <= nextIndex) {
-              allWords.push("");
-            }
-            return allWords.join(" ");
-          });
-          soundEngine.playKeyClick(true);
-        } else if (isLastWord && (testMode === "words" || testMode === "quote")) {
-          // Space on last word completes test
-          const totalElapsed = (new Date() - activeStartTime) / 1000 || 1;
-          finishTest(userInput, totalElapsed);
+        const seconds = Math.floor(elapsed);
+        if (seconds > 0 && !run.wpm.has(seconds)) {
+          run.wpm.set(seconds, sprintSpeed(countTyped(run.typed).correct, elapsed));
         }
-        e.preventDefault();
-        return;
-      }
+      }, 125);
+    };
 
-      // Normal character typing
-      const expectedChar = currentWord[currentInput.length];
-      const isCorrect = expectedChar === e.key;
-
-      if (isCorrect) {
-        keystrokesRef.current.correct += 1;
-        soundEngine.playKeyClick(false);
+    const recordAttempt = (correct, separator) => {
+      run.attempts[correct ? "correct" : "incorrect"]++;
+      if (correct) {
+        soundEngine.playKeyClick(separator);
       } else {
-        keystrokesRef.current.incorrect += 1;
-        setErrorCount((p) => p + 1);
-        errorDataRef.current = [...errorDataRef.current, { time: elapsed }];
-        setErrorData(errorDataRef.current);
+        const bucket = Math.ceil((now - run.start) / 1000);
+        run.errors.set(bucket, (run.errors.get(bucket) || 0) + 1);
         soundEngine.playError();
-      }
-
-      const newTypedWord = (currentInput || "") + e.key;
-      const allWords = userInput.split(" ");
-      allWords[currentWordIndex] = newTypedWord;
-      const newUserInput = allWords.join(" ");
-      setUserInput(newUserInput);
-
-      // End test condition for words and quote modes
-      if (
-        (testMode === "words" || testMode === "quote") &&
-        isLastWord &&
-        newTypedWord.length >= currentWord.length
-      ) {
-        const totalElapsed = (new Date() - activeStartTime) / 1000 || 1;
-        finishTest(newUserInput, totalElapsed);
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    userInput,
-    currentWordIndex,
-    extraCharsMap,
-    words,
-    testMode,
-    timeLeft,
-    startTime,
-    testDuration,
-    startTest,
-    finishTest,
-  ]);
+    if (codePassage) {
+      const { typed, attempts, completed } = appendCodeInput(codeTarget, before, after.slice(before.length));
+      if (attempts.length) {
+        startRun();
+        for (const { correct, separator } of attempts) recordAttempt(correct, separator);
+      }
+      run.typed = typed;
+      if (input.value !== typed) input.value = typed;
+      setUserInput(typed);
+      if (completed) finishTest(Math.max(0.5, (now - run.start) / 1000), true);
+      return;
+    }
 
-  const handleSoundToggle = () => {
-    const enabled = soundEngine.toggleSound();
-    setSoundEnabled(enabled);
+    const typed = before.split(" ");
+    let completed = false;
+    for (const character of Array.from(after.slice(before.length))) {
+      const index = typed.length - 1;
+      const word = typed[index];
+      const expected = words[index];
+      const separator = character === " ";
+      if (separator && !word) continue;
+      if (separator && index === words.length - 1) {
+        completed = testMode !== "time";
+        break;
+      }
+
+      startRun();
+      recordAttempt(separator || Array.from(expected)[Array.from(word).length] === character, separator);
+
+      if (separator) typed.push("");
+      else typed[index] += character;
+      if (testMode !== "time" && index === words.length - 1 &&
+        Array.from(typed[index]).length >= Array.from(expected).length) {
+        completed = true;
+        break;
+      }
+    }
+
+    run.typed = typed.join(" ");
+    input.value = run.typed;
+    setUserInput(run.typed);
+    if (completed) {
+      finishTest(Math.max(0.5, (now - run.start) / 1000), true);
+    } else if (testMode === "time" && typed.length >= words.length - 11) {
+      appendMoreWords();
+    }
   };
 
+  const handleSoundToggle = () => setSoundEnabled(soundEngine.toggleSound());
+
   return (
-    <div className="sprint-page">
+    <div className={running ? "sprint-page is-running" : "sprint-page"}>
       {/* Top Navbar */}
       <header className="sprint-nav">
         <div className="nav-brand">
@@ -408,17 +389,21 @@ export function TypingTest() {
             </svg>
             <span>History</span>
           </Link>
+          <AccountAction auth={auth} />
         </div>
       </header>
 
       {/* Settings Bar */}
       <SettingsBar
+        disabled={saving}
         punctuation={punctuation}
         numbers={numbers}
         soundEnabled={soundEnabled}
         testMode={testMode}
         testDuration={testDuration}
         wordCount={wordCount}
+        codeLanguage={codeLanguage}
+        onCodeLanguage={setCodeLanguage}
         onPunctuation={() => setPunctuation((p) => !p)}
         onNumbers={() => setNumbers((n) => !n)}
         onSoundToggle={handleSoundToggle}
@@ -429,89 +414,163 @@ export function TypingTest() {
 
       {/* Main Typing Arena */}
       <main className="typing-arena">
+        {errorMessage && (
+          <div className="error-banner" role="alert">
+            <span>{errorMessage}</span>
+            <button type="button" onClick={() => setErrorMessage("")} aria-label="Dismiss error">
+              ×
+            </button>
+          </div>
+        )}
         {/* Live Indicator (Timer or Word Progress) */}
-        <div className="live-status-bar">
+        <div className="live-status-bar" aria-hidden={loading}>
           {testMode === "time" ? (
-            <span className="status-counter timer-counter">{timeLeft}s</span>
+            <span className="status-counter timer-counter" role="timer" aria-label="Time remaining">
+              {timeLeft}s
+            </span>
+          ) : codePassage ? (
+            <span className="status-counter code-counter" role="progressbar" aria-label="Code progress"
+              aria-valuenow={currentLine} aria-valuemax={codeLineCount}>
+              Line {currentLine} / {codeLineCount}
+            </span>
           ) : (
-            <span className="status-counter words-counter">
-              {currentWordIndex} / {words.length}
+            <span
+              className="status-counter words-counter"
+              role="progressbar"
+              aria-label="Word progress"
+              aria-valuenow={currentWordIndex}
+              aria-valuemax={wordsList.length || 1}
+              aria-valuetext={currentWordIndex + " of " + wordsList.length + " words"}
+            >
+              {currentWordIndex} / {wordsList.length}
             </span>
           )}
         </div>
 
-        {/* Text Presentation Area */}
+        {codePassage && <h2 className="code-exercise-title">
+          {codePassage.title} <span>{CODE_LANGUAGES[codePassage.language]}</span>
+        </h2>}
+        {/* Typing passage */}
         {loading ? (
           <div className="loading-sentence">Preparing sprint text...</div>
         ) : (
-          <div className="sentence-display-box" onClick={() => window.focus()}>
-            {words.map((word, wi) => {
-              const typedWord = (userInput.split(" ")[wi] || "").split("");
-              const buffer = extraCharsMap[wi] || "";
-              const isCurrentWord = wi === currentWordIndex;
-              const isPastWord = wi < currentWordIndex;
+          <div className={codePassage ? "typing-viewport code-viewport" : "typing-viewport"}
+            onClick={codePassage ? () => inputRef.current?.focus({ preventScroll: true }) : undefined}>
+            <textarea
+              ref={inputRef}
+              className="typing-input"
+              aria-label="Type the sprint passage"
+              aria-describedby="sprint-passage sprint-input-help"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              inputMode="text"
+              disabled={saving}
+              onChange={handleTyping}
+              onCompositionStart={() => { composingRef.current = true; }}
+              onCompositionEnd={(event) => { composingRef.current = false; handleTyping(event); }}
+              onPaste={(event) => event.preventDefault()}
+              onDrop={(event) => event.preventDefault()}
+              onSelect={(event) => {
+                const input = event.currentTarget;
+                if (!composingRef.current && input.selectionStart === input.selectionEnd && input.selectionEnd !== input.value.length) {
+                  input.setSelectionRange(input.value.length, input.value.length);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || composingRef.current) return;
+                event.preventDefault();
+                startTest();
+              }}
+            />
+            <span className="typing-reader-text" id="sprint-passage">{codePassage?.text ?? wordsList.join(" ")}</span>
+            {codePassage ? <CodePassage source={codePassage.text} typed={userInput} /> : (
+              <div
+                className="words-flow-container"
+                aria-hidden="true"
+                style={{ transform: `translateY(-${scrollOffset}px)` }}
+              >
+                {wordsList.map((word, wi) => {
+                  const expectedChars = Array.from(word);
+                  const entered = Array.from(typedWords[wi] || "");
+                  const typedWord = entered.slice(0, expectedChars.length);
+                  const buffer = entered.slice(expectedChars.length, expectedChars.length + 8);
+                  const isCurrentWord = wi === currentWordIndex;
+                  const isPastWord = wi < currentWordIndex;
 
-              return (
-                <span
-                  key={wi}
-                  className={`word-token ${isCurrentWord ? "active-word" : ""} ${
-                    isPastWord ? "completed-word" : ""
-                  }`}
-                >
-                  {/* Word Characters */}
-                  {word.split("").map((char, ci) => {
-                    const typedChar = typedWord[ci];
-                    let statusClass = "untyped";
+                  return (
+                    <span
+                      key={wi}
+                      ref={(el) => { wordRefs.current[wi] = el; }}
+                      className={`word-token ${isCurrentWord ? "active-word" : ""} ${
+                        isPastWord ? "completed-word" : ""
+                      }`}
+                    >
+                      {/* Word Characters */}
+                      {expectedChars.map((char, ci) => {
+                        const typedChar = typedWord[ci];
+                        let statusClass = "untyped";
 
-                    if (typedChar !== undefined) {
-                      statusClass = typedChar === char ? "correct" : "incorrect";
-                    }
+                        if (typedChar !== undefined) {
+                          statusClass = typedChar === char ? "correct" : "incorrect";
+                        }
 
-                    const showCaretHere = isCurrentWord && ci === typedWord.length && !buffer;
+                        const showCaretHere = isCurrentWord && ci === typedWord.length && buffer.length === 0;
 
-                    return (
-                      <span key={ci} className={`char-span ${statusClass}`}>
-                        {showCaretHere && <span className="caret-cursor" />}
-                        {char}
-                      </span>
-                    );
-                  })}
+                        return (
+                          <span key={ci} className={`char-span ${statusClass}`}>
+                            {showCaretHere && <span className="caret-cursor" />}
+                            {char}
+                          </span>
+                        );
+                      })}
 
-                  {/* Buffer / Overflow characters */}
-                  {buffer && (
-                    <span className="buffer-span">
-                      {isCurrentWord && typedWord.length >= word.length && (
-                        <span className="caret-cursor buffer-caret" />
-                      )}
-                      {buffer.split("").map((b, bi) => (
-                        <span key={bi} className="char-span extra-char">
-                          {b}
+                      {/* Buffer / Overflow characters */}
+                      {buffer.length > 0 && (
+                        <span className="buffer-span">
+                          {isCurrentWord && typedWord.length === expectedChars.length && (
+                            <span className="caret-cursor buffer-caret" />
+                          )}
+                          {buffer.map((b, bi) => (
+                            <span key={bi} className="char-span extra-char">
+                              {b}
+                            </span>
+                          ))}
                         </span>
-                      ))}
+                      )}
+
+                      {/* End of word caret when word is typed completely */}
+                      {isCurrentWord && typedWord.length === expectedChars.length && buffer.length === 0 && (
+                        <span className="caret-cursor end-caret" />
+                      )}
+
+                      <span className="word-spacer">&nbsp;</span>
                     </span>
-                  )}
-
-                  {/* End of word caret when word is typed completely */}
-                  {isCurrentWord && typedWord.length >= word.length && !buffer && (
-                    <span className="caret-cursor end-caret" />
-                  )}
-
-                  <span className="word-spacer">&nbsp;</span>
-                </span>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {/* Quick Restart Action & Keyboard Shortcut Hint */}
         <div className="restart-controls">
-          <button onClick={startTest} className="restart-btn" title="Restart Sprint (Tab + Enter)">
+          {codePassage && (
+            <button type="button" className="code-next" disabled={saving}
+              onClick={() => startTest({ regenerate: true, previousTitle: codePassage.title })}>
+              Next snippet
+            </button>
+          )}
+          <button type="button" onClick={() => startTest()} className="restart-btn" aria-label="Restart sprint" disabled={loading || saving}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19" />
             </svg>
           </button>
-          <div className="shortcut-tip">
-            <kbd>tab</kbd> + <kbd>enter</kbd> or <kbd>esc</kbd> to restart
+          <div className="shortcut-tip" id="sprint-input-help" role={saving ? "status" : undefined}>
+            {saving ? "Finishing sprint…" : codePassage
+              ? <>Type to match the code. Press <kbd>enter</kbd> at the end of each line. Indentation is provided.</>
+              : <>Tap or click the passage to type. Press <kbd>esc</kbd> in the passage to restart.</>}
           </div>
         </div>
       </main>

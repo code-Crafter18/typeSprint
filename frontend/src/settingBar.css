@@ -72,3 +72,13 @@
     display: none;
   }
 }
+.code-language-select {
+  max-width: 100%;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #535d6e;
+  border-radius: 6px;
+  background: #1b1e25;
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 0.875rem;
+}

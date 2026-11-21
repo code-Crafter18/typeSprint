@@ -1,0 +1,33 @@
+{
+  "name": "typesprint-backend",
+  "version": "1.0.0",
+  "description": "TypeSprint typing speed test API and analytics backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed:passages": "node scripts/seedPassages.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "build:frontend": "npm --prefix ../frontend run build"
+  },
+  "keywords": [
+    "typing",
+    "speed-test",
+    "wpm",
+    "analytics",
+    "matplotlib"
+  ],
+  "author": "TypeSprint",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.11.4"
+  },
+  "engines": {
+    "node": "^22.12.0"
+  }
+}

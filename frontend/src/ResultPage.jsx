@@ -1,56 +1,26 @@
-import React, { useState, useEffect } from "react";
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import "./ResultPage.css";
 import { InteractiveChart } from "./components/InteractiveChart.jsx";
+import { AccountAction } from "./components/AccountAction.jsx";
 
-export function ResultPage() {
-  const { state } = useLocation();
-  const navigate = useNavigate();
+export function ResultPage({ results, auth }) {
+  const [activeTab, setActiveTab] = useState(results?.graph_image ? "matplotlib" : "interactive");
+  const [imageFailed, setImageFailed] = useState(false);
 
-  // Retrieve cached results if state is empty upon refresh
-  const [results, setResults] = useState(() => {
-    if (state && typeof state.wpm !== "undefined") {
-      return state;
-    }
-    const cached = sessionStorage.getItem("lastSprintResults");
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch {
-        // ignore
-      }
-    }
-    return {
-      wpm: 0,
-      raw_wpm: 0,
-      accuracy: 0,
-      errors: 0,
-      time: 0,
-      consistency: 100,
-      graph_image: null,
-      wpmData: [],
-      errorData: [],
-      keystrokes: { correct: 0, incorrect: 0, extra: 0, missed: 0 },
-    };
-  });
-
-  const [activeTab, setActiveTab] = useState("matplotlib"); // default to matplotlib as requested
-
-  // Keyboard shortcut: Space or Enter to restart
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        navigate("/");
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  if (!results) {
+    return (
+      <main className="results-wrapper">
+        <h1>Sprint results</h1>
+        <p>Complete a sprint to see your speed and accuracy.</p>
+        <Link to="/" className="action-pill primary-pill">Start a sprint</Link>
+      </main>
+    );
+  }
 
   const {
     wpm = 0,
-    raw_wpm = 0,
+    raw_wpm,
     accuracy = 0,
     errors = 0,
     time = 0,
@@ -59,7 +29,23 @@ export function ResultPage() {
     wpmData = [],
     errorData = [],
     keystrokes = { correct: 0, incorrect: 0, extra: 0, missed: 0 },
+    errorMessage = "",
+    saved,
+    saveStatus,
   } = results;
+  const guest = saveStatus === "guest" || (!saveStatus && !auth.user && !auth.unavailable);
+  const hasImage = Boolean(graph_image) && !imageFailed;
+
+  const speedTier =
+    wpm >= 100
+      ? { label: "⚡ Godspeed", color: "#ffd166" }
+      : wpm >= 80
+      ? { label: "🚀 Speed Demon", color: "#a7ff83" }
+      : wpm >= 60
+      ? { label: "🦅 Swift Falcon", color: "#38bdf8" }
+      : wpm >= 40
+      ? { label: "⌨️ Pro Typist", color: "#c084fc" }
+      : { label: "🌱 Sprinter", color: "#9ca3af" };
 
   return (
     <div className="results-wrapper">
@@ -85,11 +71,28 @@ export function ResultPage() {
       </header>
 
       <main className="results-body">
+        {errorMessage && (
+          <div className="error-banner" role="alert">
+            {errorMessage}
+          </div>
+        )}
+        {saved === false && (
+          <div className="sprint-save-status">
+            <p role="status">
+              {guest ? "Guest scores are cleared when you start another sprint."
+                : "History save wasn't confirmed for this sprint."}
+            </p>
+            {guest && !auth.user && <AccountAction auth={auth} />}
+          </div>
+        )}
         {/* Key Performance Indicators Grid */}
         <section className="kpi-grid">
           <div className="kpi-card hero-wpm">
             <span className="kpi-label">WPM</span>
             <span className="kpi-value">{wpm}</span>
+            <span className="kpi-tier-tag" style={{ color: speedTier.color }}>
+              {speedTier.label}
+            </span>
             <span className="kpi-sub">Net Speed</span>
           </div>
 
@@ -101,7 +104,7 @@ export function ResultPage() {
 
           <div className="kpi-card">
             <span className="kpi-label">Raw WPM</span>
-            <span className="kpi-value">{raw_wpm || wpm}</span>
+            <span className="kpi-value">{raw_wpm ?? wpm}</span>
             <span className="kpi-sub">Gross Speed</span>
           </div>
 
@@ -122,7 +125,7 @@ export function ResultPage() {
             <span className="kpi-value char-breakdown">
               <span className="c-correct" title="Correct characters">{keystrokes?.correct || 0}</span>
               <span className="c-sep">/</span>
-              <span className="c-incorrect" title="Incorrect characters">{keystrokes?.incorrect || errors}</span>
+              <span className="c-incorrect" title="Incorrect characters">{keystrokes?.incorrect ?? errors}</span>
               <span className="c-sep">/</span>
               <span className="c-extra" title="Extra characters">{keystrokes?.extra || 0}</span>
               <span className="c-sep">/</span>
@@ -135,9 +138,9 @@ export function ResultPage() {
         {/* Visual Analytics Card */}
         <section className="analytics-card">
           <div className="analytics-header">
-            <h3>Pacing & Mistake Distribution</h3>
+            <h3>Your Progress</h3>
             <div className="chart-tabs">
-              {graph_image && (
+              {hasImage && (
                 <button
                   className={`tab-btn ${activeTab === "matplotlib" ? "active" : ""}`}
                   onClick={() => setActiveTab("matplotlib")}
@@ -155,11 +158,11 @@ export function ResultPage() {
           </div>
 
           <div className="chart-display-container">
-            {activeTab === "interactive" ? (
+            {activeTab === "interactive" || !hasImage ? (
               <InteractiveChart wpmData={wpmData} errorData={errorData} avgWpm={wpm} totalTime={time} />
             ) : (
               <div className="matplotlib-view">
-                <img src={graph_image} alt="Matplotlib typing speed breakdown" />
+                <img src={graph_image} onError={() => setImageFailed(true)} alt="Matplotlib typing speed breakdown" />
               </div>
             )}
           </div>
@@ -171,7 +174,7 @@ export function ResultPage() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19" />
             </svg>
-            <span>Restart Sprint (Tab or Enter)</span>
+            <span>Start Another Sprint</span>
           </Link>
         </footer>
       </main>
