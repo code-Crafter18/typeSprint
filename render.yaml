@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: typesprint
+    runtime: node
+    plan: free
+    buildCommand: npm --prefix frontend ci && npm --prefix frontend run build && npm --prefix backend ci --omit=dev
+    startCommand: npm --prefix backend start
+    healthCheckPath: /api/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: APP_ORIGIN
+        sync: false

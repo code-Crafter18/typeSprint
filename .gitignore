@@ -9,5 +9,6 @@ __pycache__/
 !.env.example
 !.env.production.example
 *.log
+debug.log
 .DS_Store
 Thumbs.db
